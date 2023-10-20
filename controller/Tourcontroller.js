@@ -1,4 +1,3 @@
-const fs = require('fs');
 const Tour = require('./../models/tourModel');
 const APIFeatures = require('./../utlis/apiFeatures');
 // exports.CheckID = (req, res, next, val) => {
@@ -62,8 +61,8 @@ exports.GetoneTour = async (req, res) => {
     const features = new APIFeatures(Tour.find(), req.query)
       .filter()
       .sort()
-      .pagination()
-      .limitfields();
+      .limitFields()
+      .paginate();
     const tours = await features.query;
     res.status(200).json({
       status: 'success',

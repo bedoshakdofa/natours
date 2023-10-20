@@ -21,15 +21,14 @@ class APIFeatures {
     }
     return this;
   }
-  pagination() {
-    const limit = this.querystringlimit * 1 || 100;
+  paginate() {
+    const limit = this.querystring.limit * 1 || 100;
     const page = this.querystring.page * 1 || 1;
     const skip = (page - 1) * limit;
     this.query = this.query.skip(skip).limit(limit);
     return this;
   }
-
-  limitfields() {
+  limitFields() {
     if (this.querystring.fields) {
       const field = this.querystring.fields.split(',').join(' ');
       this.query = this.query.select(field);

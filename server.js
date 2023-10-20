@@ -16,12 +16,10 @@ mongoose
     useFindAndModify: false,
     useUnifiedTopology: true,
   })
-  .then(() =>
-    console.log('database is successfully connected'),
-  );
+  .then(() => console.log('database is successfully connected'));
 
 //listen to server
 const port = process.env.PORT;
 app.listen(port, () => {
-  console.log(`lestning to server at port ${port}`);
+  console.log(`listning to server at port ${port}`);
 });
