@@ -1,17 +1,14 @@
 const Tour = require('./../models/tourModel');
 const AppError = require('./../utlis/APPErorr');
 const APIFeatures = require('./../utlis/apiFeatures');
+const catchasync = require('./../utlis/catchAsync');
 exports.alaisTour = (req, res, next) => {
   req.query.limit = '5';
   req.query.sort = '-ratingsAverage,-price';
   req.query.fields = 'name,duration,price,ratingsAverage';
   next();
 };
-function catchasync(fn) {
-  return function (req, res, next) {
-    fn(req, res, next).catch((err) => next(err));
-  };
-}
+
 exports.GetAllTour = catchasync(async (req, res, next) => {
   const features = new APIFeatures(Tour, req.query)
     .filter()

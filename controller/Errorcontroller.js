@@ -11,7 +11,7 @@ const handleDuplicateError = (err) => {
 
 const handlevalidationError = (err) => {
   const mesg = Object.values(err.errors).map((el) => el.message);
-  return new AppError(`invaild input ${mesg.join(' ')}`, 400);
+  return new AppError(`invaild input ${mesg.join('. ')}`, 400);
 };
 
 const Errordev = (err, res) => {
