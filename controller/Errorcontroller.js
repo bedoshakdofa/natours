@@ -14,6 +14,13 @@ const handlevalidationError = (err) => {
   return new AppError(`invaild input ${mesg.join('. ')}`, 400);
 };
 
+const handleExpJwt = () => {
+  return new AppError('token expired,please login', 401);
+};
+const handleJWTError = () => {
+  return new AppError('invaild token please login again', 401);
+};
+
 const Errordev = (err, res) => {
   res.status(err.statusCode).json({
     stack: err.stack,
@@ -44,6 +51,7 @@ module.exports = (err, req, res, next) => {
   if (process.env.NODE_ENV === 'development') {
     Errordev(err, res);
   } else if (process.env.NODE_ENV === 'production') {
+    let error = { ...err };
     if (err.name === 'CastError') {
       err = handleCastError(err);
     } else if (err.code === 11000) {
@@ -52,7 +60,8 @@ module.exports = (err, req, res, next) => {
     if (err.name === 'ValidationError') {
       err = handlevalidationError(err);
     }
-
+    if (err.name === 'TokenExpiredError') err = handleExpJwt();
+    if (err.name === 'JsonWebTokenError') err = handleJWTError();
     Errorprod(err, res);
   }
 };
