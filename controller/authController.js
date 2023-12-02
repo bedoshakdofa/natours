@@ -3,7 +3,8 @@ const User = require('./../models/UserModel');
 const catchasync = require('./../utlis/catchAsync');
 const jwt = require('jsonwebtoken');
 const AppError = require('./../utlis/APPErorr');
-
+const sendEmail = require('./../utlis/email');
+const crypto = require('crypto');
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET_KEY, {
     expiresIn: '90d',
@@ -16,6 +17,7 @@ exports.signup = catchasync(async (req, res, next) => {
     email: req.body.email,
     password: req.body.password,
     passwordconfirm: req.body.passwordconfirm,
+    role: req.body.role,
   });
   const token = signToken(newuser._id);
   res.status(200).json({
@@ -40,9 +42,7 @@ exports.login = catchasync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    data: {
-      token,
-    },
+    token,
   });
 });
 
@@ -63,11 +63,10 @@ exports.protect = catchasync(async (req, res, next) => {
     token,
     process.env.JWT_SECRET_KEY,
   );
-
   const currantuser = await User.findById(decoded.id);
 
   if (!currantuser) {
-    return next(new AppError('your are not user plz sign in', 401));
+    return next(new AppError('your are not user plz signup', 401));
   }
 
   if (currantuser.passwordchange(decoded.iat)) {
@@ -77,4 +76,115 @@ exports.protect = catchasync(async (req, res, next) => {
   }
   req.user = currantuser;
   next();
+});
+
+exports.restrictTo = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return next(
+        new AppError(
+          "you don/'t have the permison to perform this action",
+          403,
+        ),
+      );
+    }
+    next();
+  };
+};
+
+exports.forgetpassword = catchasync(async (req, res, next) => {
+  const currantuser = await User.findOne({ email: req.body.email });
+  if (!currantuser) {
+    return next(new AppError('no user with this email ', 404));
+  }
+
+  const restToken = currantuser.passwordrestToken();
+  await currantuser.save({ validateBeforeSave: false });
+
+  const URL = `${req.protocol}://${req.get(
+    'host',
+  )}/api/v1/users/restpassword/${restToken}`;
+
+  const message = `Forgot your password? 
+  Submit a PATCH request with your new password and passwordConfirm to: ${URL}.
+  \nIf you didn't forget your password, please ignore this email!`;
+
+  try {
+    await sendEmail({
+      email: currantuser.email,
+      subject: 'password rest token',
+      message,
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'token have been sent',
+    });
+  } catch (err) {
+    currantuser.restToken = undefined;
+    currantuser.passowrdTokenEXP = undefined;
+    currantuser.save({ validateBeforeSave: false });
+    return next(
+      new AppError(
+        'there was error in sending email please try again leter',
+        500,
+      ),
+    );
+  }
+});
+
+exports.RestPassword = catchasync(async (req, res, next) => {
+  const hastoken = crypto
+    .createHash('sha256')
+    .update(req.params.token)
+    .digest('hex');
+  const currantuser = await User.findOne({
+    restToken: hastoken,
+    passowrdTokenEXP: { $gt: Date.now() },
+  });
+
+  if (!currantuser) {
+    return next(new AppError('invaild token or expired', 401));
+  }
+  currantuser.password = req.body.password;
+  currantuser.passwordconfirm = req.body.passwordconfirm;
+  currantuser.restToken = undefined;
+  currantuser.passowrdTokenEXP = undefined;
+  await currantuser.save();
+
+  const token = signToken(currantuser._id);
+  res.status(200).json({
+    status: 'success',
+    token,
+  });
+});
+
+exports.UpdatePassword = catchasync(async (req, res, next) => {
+  const currantuser = await User.findById(req.user.id).select('+password');
+
+  console.log(
+    await currantuser.CheckPassword(
+      req.body.passwordCurrant,
+      currantuser.password,
+    ),
+  );
+  if (
+    !(await currantuser.CheckPassword(
+      req.body.passwordCurrant,
+      currantuser.password,
+    ))
+  ) {
+    return next(new AppError('your password entered does not match ', 400));
+  }
+
+  currantuser.password = req.body.password;
+  currantuser.passwordconfirm = req.body.passwordconfirm;
+  await currantuser.save();
+
+  const token = signToken(currantuser._id);
+  res.status(200).json({
+    status: 'sucess',
+    token,
+    currantuser,
+  });
 });
