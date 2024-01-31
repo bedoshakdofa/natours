@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const AppError = require('./../utlis/APPErorr');
 const sendEmail = require('./../utlis/email');
 const crypto = require('crypto');
+
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET_KEY, {
     expiresIn: '90d',
@@ -27,6 +28,35 @@ exports.signup = catchasync(async (req, res, next) => {
   });
 });
 
+exports.protect = catchasync(async (req, res, next) => {
+  let token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+  //if not found raise an error
+  if (!token) {
+    return next(new AppError('your are not login please login ', 401));
+  }
+  //verfify the token we take
+  const decode = await promisify(jwt.verify)(token, process.env.JWT_SECRET_KEY);
+
+  //check if there a user for this token
+  const currantuser = await User.findById(decode.id);
+
+  if (!currantuser) {
+    return next(new AppError('invaild email or password', 401));
+  }
+  // check if the user change the password after jwt issued
+  if (currantuser.passwordchange(decode.iat)) {
+    return next(new AppError('you have change your password recently ', 401));
+  }
+  req.user = currantuser;
+  next();
+});
+
 exports.login = catchasync(async (req, res, next) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -44,38 +74,6 @@ exports.login = catchasync(async (req, res, next) => {
     status: 'success',
     token,
   });
-});
-
-exports.protect = catchasync(async (req, res, next) => {
-  let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (!token) {
-    return next(new AppError('your not logged in, please log in ', 401));
-  }
-
-  const decoded = await promisify(jwt.verify)(
-    token,
-    process.env.JWT_SECRET_KEY,
-  );
-  const currantuser = await User.findById(decoded.id);
-
-  if (!currantuser) {
-    return next(new AppError('your are not user plz signup', 401));
-  }
-
-  if (currantuser.passwordchange(decoded.iat)) {
-    return next(
-      new AppError('you have change your password, plz login again', 401),
-    );
-  }
-  req.user = currantuser;
-  next();
 });
 
 exports.restrictTo = (...roles) => {
@@ -162,12 +160,6 @@ exports.RestPassword = catchasync(async (req, res, next) => {
 exports.UpdatePassword = catchasync(async (req, res, next) => {
   const currantuser = await User.findById(req.user.id).select('+password');
 
-  console.log(
-    await currantuser.CheckPassword(
-      req.body.passwordCurrant,
-      currantuser.password,
-    ),
-  );
   if (
     !(await currantuser.CheckPassword(
       req.body.passwordCurrant,

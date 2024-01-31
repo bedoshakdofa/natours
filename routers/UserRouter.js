@@ -1,17 +1,25 @@
 const express = require('express');
 const User = require('./../controller/Usercontroller');
-const auth = require('./../controller/authController');
+const Auth = require('./../controller/authController');
 const router = express.Router();
 
-router.post('/signup', auth.signup);
-router.post('/login', auth.login);
-router.post('/forgetpassword', auth.forgetpassword);
-router.patch('/updatepassword', auth.protect, auth.UpdatePassword);
-router.patch('/restpassword/:token', auth.RestPassword);
-router.patch('/updateMe', auth.protect, User.UpdateMe);
-router.delete('/deleteMe', auth.protect, User.DeleteMe);
-router.route('/').get(User.GetAllUser).post(User.CreateUser);
+router.post('/signup', Auth.signup);
+router.post('/login', Auth.login);
+router.post('/forgetpassword', Auth.forgetpassword);
+router.patch('/restpassword/:token', Auth.RestPassword);
 
-router.route('/:id').patch(User.UpdateUser).get(User.GetUser);
+router.use(Auth.protect);
+router.patch('/updateMypassword', Auth.UpdatePassword);
+router.patch('/updateMe', User.UpdateMe);
+router.delete('/deleteMe', User.DeleteMe);
+router.get('/getMe', User.getMe);
+
+router.use(Auth.restrictTo('admin'));
+router.route('/').get(User.GetAllUser);
+router
+  .route('/:id')
+  .delete(User.deleteUser)
+  .patch(User.UpdateUser)
+  .get(User.GetUser);
 
 module.exports = router;

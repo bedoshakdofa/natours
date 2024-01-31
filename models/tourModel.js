@@ -60,11 +60,40 @@ const tourSchema = new mongoose.Schema(
       type: Number,
       required: [true, 'there must be price'],
     },
-    startDate: [Date],
+    startDates: [Date],
     SecretTOur: {
       type: Boolean,
       default: false,
     },
+    startLocation: {
+      type: {
+        type: String,
+        default: 'Point',
+        enum: ['Point'],
+      },
+      coordinates: [Number],
+      address: String,
+      description: String,
+    },
+    locations: [
+      {
+        type: {
+          type: String,
+          default: 'Point',
+          enum: ['Point'],
+        },
+        coordinates: [Number],
+        description: String,
+        address: String,
+        day: Number,
+      },
+    ],
+    guides: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   {
     toJSON: { virtuals: true },
@@ -72,8 +101,18 @@ const tourSchema = new mongoose.Schema(
   },
 );
 
-tourSchema.virtual('durationweeks').get(function () {
-  return this.duration / 7;
+// tourSchema.virtual('durationweeks').get(function () {
+//   return this.duration / 7;
+// });
+
+tourSchema.index({ price: 1, ratingsAverage: -1 });
+tourSchema.index({ slug: 1 });
+tourSchema.index({ startLocation: '2dsphere' });
+
+tourSchema.virtual('review', {
+  ref: 'Reviews',
+  foreignField: 'tour',
+  localField: '_id',
 });
 
 tourSchema.pre('save', function () {
@@ -85,10 +124,28 @@ tourSchema.pre(/^find/, function (next) {
   next();
 });
 
-tourSchema.pre('aggregate', function (next) {
-  this.pipeline().unshift({ $match: { SecretTOur: { $ne: true } } });
+tourSchema.pre(/^find/, function (next) {
+  this.populate({
+    path: 'guides',
+    select: '-__v',
+  });
   next();
 });
+
+// tourSchema.pre('save', async function (next) {
+//   this.guides = await Promise.all(
+//     this.guides.map(async (id) => {
+//       await User.findById(id);
+//     }),
+//   );
+
+//   next();
+// });
+
+// tourSchema.pre('aggregate', function (next) {
+//   this.pipeline().unshift({ $match: { SecretTOur: { $ne: true } } });
+//   next();
+// });
 
 const tour = mongoose.model('tour', tourSchema);
 
