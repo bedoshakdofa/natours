@@ -10,14 +10,16 @@ exports.DeleteMe = catchAsync(async (req, res) => {
   });
 });
 exports.UpdateMe = catchAsync(async (req, res, next) => {
-  const allowed = {
-    name: req.body.name,
-    email: req.body.email,
-  };
-  const UpdatedUser = await User.findByIdAndUpdate(req.user.id, allowed, {
-    new: true,
-    runValidators: true,
-  });
+  const body = [req.body, req.file];
+  console.log(body);
+  const UpdatedUser = await User.findByIdAndUpdate(
+    req.user.id,
+    { body },
+    {
+      new: true,
+      runValidators: true,
+    },
+  );
 
   res.status(200).json({
     status: 'success',
@@ -28,7 +30,7 @@ exports.UpdateMe = catchAsync(async (req, res, next) => {
 });
 
 exports.getMe = catchAsync(async (req, res, next) => {
-  const me = await User.find(req.user.id);
+  const me = await User.findById(req.user.id);
   res.status(200).json({
     status: 'success',
     data: {

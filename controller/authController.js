@@ -11,50 +11,34 @@ const signToken = (id) => {
     expiresIn: '90d',
   });
 };
+const createSendToken = (user, statuscode, res) => {
+  const token = signToken(user._id);
+  const cookieOption = {
+    expiresIn: new Date(
+      Date.now() + process.env.COOKIE_EXP_IN * 24 * 60 * 60 * 1000,
+    ),
+    httpOnly: true,
+  };
+
+  if (process.env.NODE_ENV === 'production') {
+    cookieOption.secure = true;
+  }
+  res.cookie('jwt', token, cookieOption);
+
+  user.password = undefined;
+  res.status(statuscode).json({
+    status: 'success',
+    token,
+    data: {
+      user,
+    },
+  });
+};
 
 exports.signup = catchasync(async (req, res, next) => {
-  const newuser = await User.create({
-    name: req.body.name,
-    email: req.body.email,
-    password: req.body.password,
-    passwordconfirm: req.body.passwordconfirm,
-    role: req.body.role,
-  });
-  const token = signToken(newuser._id);
-  res.status(200).json({
-    status: 'succss',
-    token,
-    user: newuser,
-  });
-});
-
-exports.protect = catchasync(async (req, res, next) => {
-  let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-  //if not found raise an error
-  if (!token) {
-    return next(new AppError('your are not login please login ', 401));
-  }
-  //verfify the token we take
-  const decode = await promisify(jwt.verify)(token, process.env.JWT_SECRET_KEY);
-
-  //check if there a user for this token
-  const currantuser = await User.findById(decode.id);
-
-  if (!currantuser) {
-    return next(new AppError('invaild email or password', 401));
-  }
-  // check if the user change the password after jwt issued
-  if (currantuser.passwordchange(decode.iat)) {
-    return next(new AppError('you have change your password recently ', 401));
-  }
-  req.user = currantuser;
-  next();
+  console.log(req.body);
+  const newuser = await User.create(req.body);
+  createSendToken(newuser, 200, res);
 });
 
 exports.login = catchasync(async (req, res, next) => {
@@ -68,26 +52,18 @@ exports.login = catchasync(async (req, res, next) => {
   if (!user || !(await user.CheckPassword(password, user.password)))
     return next(new AppError('invaild Email or password', 401));
 
-  const token = signToken(user._id);
-
-  res.status(200).json({
-    status: 'success',
-    token,
-  });
+  createSendToken(user, 200, res);
 });
 
-exports.restrictTo = (...roles) => {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return next(
-        new AppError(
-          "you don/'t have the permison to perform this action",
-          403,
-        ),
-      );
-    }
-    next();
+exports.logout = (req, res) => {
+  cookieOption = {
+    httpOnly: true,
   };
+  res.clearCookie('jwt', cookieOption);
+  if (process.env.NODE_ENV === 'production') {
+    cookieOption.secure = true;
+  }
+  res.status(200).json({ status: 'success' });
 };
 
 exports.forgetpassword = catchasync(async (req, res, next) => {
@@ -180,3 +156,73 @@ exports.UpdatePassword = catchasync(async (req, res, next) => {
     currantuser,
   });
 });
+
+//Authentication middleware
+
+exports.protect = catchasync(async (req, res, next) => {
+  let token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies.jwt) {
+    token = req.cookies.jwt;
+  }
+  //if not found raise an error
+  if (!token) {
+    return next(new AppError('your are not login please login ', 401));
+  }
+  //verfify the token we take
+  const decode = await promisify(jwt.verify)(token, process.env.JWT_SECRET_KEY);
+
+  //check if there a user for this token
+  const currantuser = await User.findById(decode.id);
+
+  if (!currantuser) {
+    return next(new AppError('invaild email or password', 401));
+  }
+  // check if the user change the password after jwt issued
+  if (currantuser.passwordchange(decode.iat)) {
+    return next(new AppError('you have change your password recently ', 401));
+  }
+  req.user = currantuser;
+  next();
+});
+
+exports.restrictTo = (...roles) => {
+  return (req, res, next) => {
+    console.log(req.user);
+    console.log(roles);
+    if (!roles.includes(req.user.role)) {
+      return next(
+        new AppError("you don't have the permison to perform this action", 403),
+      );
+    }
+    next();
+  };
+};
+
+exports.isLoggedIn = async (req, res, next) => {
+  if (req.cookies.jwt) {
+    //verfify the token we take
+    const decode = await promisify(jwt.verify)(
+      req.cookies.jwt,
+      process.env.JWT_SECRET_KEY,
+    );
+
+    //check if there a user for this token
+    const currantuser = await User.findById(decode.id);
+
+    if (!currantuser) {
+      return next();
+    }
+    // check if the user change the password after jwt issued
+    if (currantuser.passwordchange(decode.iat)) {
+      return next();
+    }
+    res.locals.user = currantuser;
+    return next();
+  }
+  next();
+};
